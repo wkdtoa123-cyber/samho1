@@ -1,0 +1,618 @@
+<!DOCTYPE html>
+<html lang="ko" class="light">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>NEIS 학사일정 스마트 달력</title>
+  
+  <!-- [초보자 안내] Tailwind CSS CDN - 외부 설치 없이 예쁜 UI 라이브러리를 불러옵니다 -->
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script>
+    // Tailwind 다크모드 설정
+    tailwind.config = {
+      darkMode: 'class',
+      theme: {
+        extend: {
+          colors: {
+            apple: {
+              bgLight: '#f5f5f7',
+              cardLight: '#ffffff',
+              bgDark: '#000000',
+              cardDark: '#1c1c1e',
+              blue: '#0071e3',
+              blueHover: '#0077ed',
+            }
+          }
+        }
+      }
+    }
+  </script>
+
+  <!-- [초보자 안내] FullCalendar 6.x 달력 라이브러리 CDN -->
+  <script src="https://cdn.jsdelivr.net/npm/fullcalendar@6.1.10/index.global.min.js"></script>
+  <!-- FullCalendar 한국어 언어 팩 -->
+  <script src="https://cdn.jsdelivr.net/npm/@fullcalendar/core@6.1.10/locales/ko.global.min.js"></script>
+
+  <!-- 애플 스타일 애플리케이션 커스텀 스타일 -->
+  <style>
+    @import url('https://cdn.jsdelivr.net/gh/orioncactus/pretendard/dist/web/static/pretendard.css');
+    
+    body {
+      font-family: "Pretendard Variable", Pretendard, -apple-system, BlinkMacSystemFont, system-ui, Roboto, "Helvetica Neue", "Segoe UI", "Apple SD Gothic Neo", sans-serif;
+      transition: background-color 0.3s ease, color 0.3s ease;
+    }
+
+    /* FullCalendar 애플 스타일 커스텀 디자인 */
+    .fc {
+      --fc-border-color: rgba(229, 231, 235, 0.8);
+      --fc-today-bg-color: rgba(59, 130, 246, 0.08);
+      font-size: 0.92rem;
+    }
+    
+    .dark .fc {
+      --fc-border-color: rgba(55, 65, 81, 0.5);
+      --fc-today-bg-color: rgba(59, 130, 246, 0.18);
+      --fc-page-bg-color: #1c1c1e;
+      --fc-neutral-bg-color: #2c2c2e;
+      --fc-list-event-hover-bg-color: #2c2c2e;
+      color: #f3f4f6;
+    }
+
+    .fc .fc-toolbar-title {
+      font-size: 1.25rem;
+      font-weight: 700;
+      letter-spacing: -0.02em;
+    }
+
+    .fc .fc-button-primary {
+      background-color: #0071e3;
+      border-color: #0071e3;
+      border-radius: 9999px;
+      padding: 0.4rem 0.9rem;
+      font-size: 0.85rem;
+      font-weight: 600;
+      transition: all 0.2s;
+    }
+
+    .fc .fc-button-primary:hover {
+      background-color: #0077ed;
+      border-color: #0077ed;
+      transform: translateY(-1px);
+    }
+
+    .fc .fc-button-primary:disabled {
+      background-color: #94a3b8;
+      border-color: #94a3b8;
+    }
+
+    .fc .fc-daygrid-day-number {
+      font-weight: 600;
+      padding: 6px;
+      color: #374151;
+    }
+
+    .dark .fc .fc-daygrid-day-number {
+      color: #e5e7eb;
+    }
+
+    .fc-event {
+      cursor: pointer;
+      border-radius: 6px !important;
+      padding: 2px 4px !important;
+      font-size: 0.8rem !important;
+      font-weight: 600 !important;
+      border: none !important;
+      box-shadow: 0 1px 2px rgba(0,0,0,0.06);
+      transition: transform 0.15s ease;
+    }
+
+    .fc-event:hover {
+      transform: scale(1.02);
+      filter: brightness(1.05);
+    }
+
+    /* 백드롭 글래스 효과 */
+    .backdrop-blur-glass {
+      backdrop-filter: blur(16px);
+      -webkit-backdrop-filter: blur(16px);
+    }
+  </style>
+</head>
+<body class="bg-[#f5f5f7] dark:bg-black text-slate-900 dark:text-slate-100 min-h-screen flex flex-col antialiased">
+
+  <!-- [상단 헤더 & 테마/설정] -->
+  <header class="sticky top-0 z-40 w-full border-b border-slate-200/80 dark:border-slate-800/80 bg-white/80 dark:bg-black/80 backdrop-blur-glass transition-colors">
+    <div class="max-w-6xl mx-auto px-4 h-16 flex items-center justify-between">
+      <div class="flex items-center space-x-3">
+        <div class="w-10 h-10 rounded-2xl bg-gradient-to-tr from-blue-600 to-indigo-500 flex items-center justify-center text-white font-bold text-xl shadow-md shadow-blue-500/20">
+          🏫
+        </div>
+        <div>
+          <h1 class="text-base font-bold tracking-tight leading-none text-slate-900 dark:text-white">NEIS 학사일정</h1>
+          <p class="text-xs text-slate-500 dark:text-slate-400 mt-0.5">학교 이름 검색 스마트 달력</p>
+        </div>
+      </div>
+
+      <!-- 테마 토글 & 설정 버튼 -->
+      <div class="flex items-center space-x-2">
+        <!-- 다크모드 토글 버튼 -->
+        <button id="themeToggleBtn" class="p-2 rounded-full hover:bg-slate-100 dark:hover:bg-slate-800 text-slate-600 dark:text-slate-300 transition-colors" title="다크/라이트 모드 전환">
+          <span id="themeIcon">🌙</span>
+        </button>
+
+        <!-- API 키 설정 버튼 -->
+        <button onclick="openKeyModal()" class="px-3 py-1.5 text-xs font-semibold rounded-full bg-slate-100 hover:bg-slate-200 dark:bg-slate-800 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-300 transition-all flex items-center space-x-1">
+          <span>🔑 API Key</span>
+        </button>
+      </div>
+    </div>
+  </header>
+
+  <!-- [메인 콘텐츠] -->
+  <main class="flex-1 max-w-6xl w-full mx-auto px-4 py-8 flex flex-col space-y-6">
+
+    <!-- [중앙 검색 섹션] -->
+    <section class="w-full flex flex-col items-center justify-center pt-2 pb-4">
+      <div class="text-center mb-6 max-w-xl">
+        <h2 class="text-2xl sm:text-3xl font-extrabold tracking-tight text-slate-900 dark:text-white">
+          우리 학교 <span class="bg-gradient-to-r from-blue-600 to-indigo-600 bg-clip-text text-transparent">학사일정</span>을 확인하세요
+        </h2>
+        <p class="text-sm text-slate-500 dark:text-slate-400 mt-2">
+          학교명을 입력하면 시험, 방학, 공휴일 일정을 컬러로 한눈에 볼 수 있습니다.
+        </p>
+      </div>
+
+      <!-- 애플 스타일 중앙 검색창 -->
+      <div class="relative w-full max-w-xl">
+        <form id="searchForm" class="relative flex items-center">
+          <input 
+            type="text" 
+            id="schoolInput" 
+            placeholder="학교 이름을 입력하세요 (예: 서울고, 경기고, 하나고)" 
+            autocomplete="off"
+            class="w-full h-14 pl-12 pr-28 rounded-2xl bg-white dark:bg-[#1c1c1e] border border-slate-200 dark:border-slate-800 shadow-lg shadow-slate-200/50 dark:shadow-none text-slate-900 dark:text-white placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-blue-500/50 focus:border-blue-500 text-base transition-all"
+          >
+          <div class="absolute left-4 text-slate-400 text-lg">
+            🔍
+          </div>
+          <button 
+            type="submit" 
+            id="searchBtn"
+            class="absolute right-2 px-5 py-2.5 bg-[#0071e3] hover:bg-[#0077ed] active:scale-95 text-white font-semibold text-sm rounded-xl transition-all shadow-md shadow-blue-500/20"
+          >
+            검색
+          </button>
+        </form>
+
+        <!-- 자동완성 / 검색 결과 드롭다운 -->
+        <div id="searchDropdown" class="hidden absolute top-full left-0 right-0 mt-2 bg-white dark:bg-[#1c1c1e] border border-slate-200 dark:border-slate-800 rounded-2xl shadow-xl z-50 max-h-72 overflow-y-auto divide-y divide-slate-100 dark:divide-slate-800">
+          <!-- JS로 동적 생성 -->
+        </div>
+      </div>
+
+      <!-- 자주 찾는 학교 퀵 버튼 -->
+      <div class="flex flex-wrap items-center justify-center gap-2 mt-4 text-xs">
+        <span class="text-slate-400 dark:text-slate-500 font-medium">추천 검색:</span>
+        <button onclick="quickSearch('서울고등학교')" class="px-2.5 py-1 rounded-full bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 hover:bg-slate-50 dark:hover:bg-slate-700 text-slate-600 dark:text-slate-300 transition-colors">서울고</button>
+        <button onclick="quickSearch('경기고등학교')" class="px-2.5 py-1 rounded-full bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 hover:bg-slate-50 dark:hover:bg-slate-700 text-slate-600 dark:text-slate-300 transition-colors">경기고</button>
+        <button onclick="quickSearch('하나고등학교')" class="px-2.5 py-1 rounded-full bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 hover:bg-slate-50 dark:hover:bg-slate-700 text-slate-600 dark:text-slate-300 transition-colors">하나고</button>
+        <button onclick="quickSearch('대원외국어고등학교')" class="px-2.5 py-1 rounded-full bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 hover:bg-slate-50 dark:hover:bg-slate-700 text-slate-600 dark:text-slate-300 transition-colors">대원외고</button>
+      </div>
+    </section>
+
+    <!-- [선택된 학교 정보 배너 & 필터 범례] -->
+    <section id="schoolBanner" class="hidden w-full bg-white dark:bg-[#1c1c1e] border border-slate-200 dark:border-slate-800/80 rounded-2xl p-5 shadow-sm transition-all">
+      <div class="flex flex-col md:flex-row md:items-center justify-between gap-4">
+        <div>
+          <div class="flex items-center space-x-2">
+            <span id="schoolTypeBadge" class="px-2.5 py-0.5 text-xs font-bold rounded-full bg-blue-100 text-blue-700 dark:bg-blue-900/50 dark:text-blue-300">고등학교</span>
+            <span id="schoolOffice" class="text-xs text-slate-500 dark:text-slate-400">서울특별시교육청</span>
+          </div>
+          <h3 id="schoolNameHeading" class="text-xl font-bold text-slate-900 dark:text-white mt-1">서울고등학교</h3>
+          <p id="schoolAddress" class="text-xs text-slate-500 dark:text-slate-400 mt-1">서울특별시 서초구 효령로 178</p>
+        </div>
+
+        <!-- 학사일정 범례 (색상 태그) -->
+        <div class="flex flex-wrap items-center gap-2 text-xs font-semibold">
+          <span class="px-2.5 py-1 rounded-lg bg-red-500 text-white flex items-center space-x-1"><span>📝</span><span>시험</span></span>
+          <span class="px-2.5 py-1 rounded-lg bg-blue-500 text-white flex items-center space-x-1"><span>🏖️</span><span>방학/휴업</span></span>
+          <span class="px-2.5 py-1 rounded-lg bg-rose-500 text-white flex items-center space-x-1"><span>🔴</span><span>공휴일</span></span>
+          <span class="px-2.5 py-1 rounded-lg bg-emerald-500 text-white flex items-center space-x-1"><span>🎓</span><span>입학/개학/졸업</span></span>
+          <span class="px-2.5 py-1 rounded-lg bg-purple-500 text-white flex items-center space-x-1"><span>🎉</span><span>학교행사</span></span>
+        </div>
+      </div>
+    </section>
+
+    <!-- [로딩 및 에러 상태 표시] -->
+    <div id="loadingSpinner" class="hidden flex-col items-center justify-center py-12 space-y-3">
+      <div class="w-10 h-10 border-4 border-blue-500 border-t-transparent rounded-full animate-spin"></div>
+      <p class="text-sm font-medium text-slate-500 dark:text-slate-400">학사일정 데이터를 가져오는 중입니다...</p>
+    </div>
+
+    <div id="errorMessage" class="hidden p-4 rounded-2xl bg-red-50 dark:bg-red-950/40 border border-red-200 dark:border-red-900 text-red-700 dark:text-red-300 text-sm text-center">
+      <!-- 에러 메시지 출력 -->
+    </div>
+
+    <!-- [달력 뷰 섹션] -->
+    <section class="w-full bg-white dark:bg-[#1c1c1e] border border-slate-200 dark:border-slate-800 rounded-3xl p-4 sm:p-6 shadow-xl shadow-slate-200/40 dark:shadow-none">
+      <div id="calendar"></div>
+    </section>
+  </main>
+
+  <!-- [하단 푸터] -->
+  <footer class="mt-auto border-t border-slate-200 dark:border-slate-800 bg-white dark:bg-black py-6 text-center text-xs text-slate-400 dark:text-slate-500">
+    <p>Data provided by <a href="https://open.neis.go.kr" target="_blank" class="underline hover:text-blue-500">NEIS Open API (교육부 나이스)</a></p>
+  </footer>
+
+  <!-- [일정 상세 보기 모달] -->
+  <div id="eventModal" class="hidden fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm p-4">
+    <div class="bg-white dark:bg-[#1c1c1e] border border-slate-200 dark:border-slate-800 rounded-3xl p-6 max-w-md w-full shadow-2xl space-y-4">
+      <div class="flex items-start justify-between">
+        <div>
+          <span id="modalCategoryBadge" class="px-2.5 py-0.5 text-xs font-bold rounded-full bg-blue-100 text-blue-700">시험</span>
+          <h3 id="modalEventTitle" class="text-xl font-bold text-slate-900 dark:text-white mt-1">중간고사</h3>
+        </div>
+        <button onclick="closeEventModal()" class="text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 text-xl font-bold">✕</button>
+      </div>
+
+      <div class="space-y-2 text-sm text-slate-600 dark:text-slate-300 bg-slate-50 dark:bg-slate-800/50 p-4 rounded-2xl border border-slate-100 dark:border-slate-800">
+        <p><strong class="text-slate-900 dark:text-white">📅 일자:</strong> <span id="modalEventDate">2026년 4월 20일</span></p>
+        <p><strong class="text-slate-900 dark:text-white">🏫 학교:</strong> <span id="modalSchoolName">서울고등학교</span></p>
+        <p><strong class="text-slate-900 dark:text-white">👥 대상 학년:</strong> <span id="modalGrades">전학년</span></p>
+        <p><strong class="text-slate-900 dark:text-white">📌 수업 공제:</strong> <span id="modalSubtractDay">정상수업</span></p>
+      </div>
+
+      <button onclick="closeEventModal()" class="w-full py-3 bg-slate-900 dark:bg-white text-white dark:text-slate-900 font-bold rounded-xl hover:opacity-90 transition-opacity">
+        확인
+      </button>
+    </div>
+  </div>
+
+  <!-- [API 키 설정 모달] -->
+  <div id="keyModal" class="hidden fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm p-4">
+    <div class="bg-white dark:bg-[#1c1c1e] border border-slate-200 dark:border-slate-800 rounded-3xl p-6 max-w-md w-full shadow-2xl space-y-4">
+      <h3 class="text-lg font-bold text-slate-900 dark:text-white">🔑 NEIS Open API 키 설정</h3>
+      <p class="text-xs text-slate-500 dark:text-slate-400">
+        나이스 대국민서비스 오픈API에서 발급받은 인증키를 입력하세요.
+      </p>
+      <input type="text" id="modalKeyInput" class="w-full p-3 rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 text-slate-900 dark:text-white">
+      <div class="flex justify-end space-x-2">
+        <button onclick="closeKeyModal()" class="px-4 py-2 text-xs font-semibold rounded-xl bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300">취소</button>
+        <button onclick="saveApiKey()" class="px-4 py-2 text-xs font-semibold rounded-xl bg-blue-600 text-white hover:bg-blue-700">저장</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- ================================================================================= -->
+  <!-- [자바스크립트 로직] -->
+  <!-- ================================================================================= -->
+  <script>
+    // [1단계] NEIS Open API 인증 키 설정 (기본 발급 키 지정)
+    let NEIS_API_KEY = "39b6bbea2e354a768f2ad3ceca04dd84";
+
+    // 전역 상태 변수
+    let calendar = null;
+    let currentSchool = null;
+    let selectedYear = new Date().getFullYear();
+
+    // 페이지 로드 시 초기화
+    document.addEventListener('DOMContentLoaded', function() {
+      initTheme();
+      initCalendar();
+      setupEventListeners();
+      
+      // 기본 학교(서울고등학교) 자동 검색 실행
+      quickSearch('서울고등학교');
+    });
+
+    // 다크모드 초기화 및 토글
+    function initTheme() {
+      const themeToggleBtn = document.getElementById('themeToggleBtn');
+      const themeIcon = document.getElementById('themeIcon');
+
+      // 시스템 모드 또는 기본 화이트 모드 설정
+      if (window.matchMedia('(prefers-color-scheme: dark)').matches) {
+        document.documentElement.classList.add('dark');
+        themeIcon.textContent = '☀️';
+      } else {
+        document.documentElement.classList.remove('dark');
+        themeIcon.textContent = '🌙';
+      }
+
+      themeToggleBtn.addEventListener('click', () => {
+        const isDark = document.documentElement.classList.toggle('dark');
+        themeIcon.textContent = isDark ? '☀️' : '🌙';
+        if (calendar) calendar.render();
+      });
+    }
+
+    // FullCalendar 초기화
+    function initCalendar() {
+      const calendarEl = document.getElementById('calendar');
+
+      calendar = new FullCalendar.Calendar(calendarEl, {
+        initialView: 'dayGridMonth',
+        locale: 'ko', // 한국어 표시
+        headerToolbar: {
+          left: 'prev,next today',
+          center: 'title',
+          right: 'dayGridMonth,listMonth'
+        },
+        buttonText: {
+          today: '오늘',
+          month: '달력',
+          list: '목록'
+        },
+        height: 'auto',
+        navLinks: true,
+        editable: false,
+        dayMaxEvents: true,
+        events: [],
+        
+        // 일정 클릭 시 모달 팝업 열기
+        eventClick: function(info) {
+          showEventDetail(info.event);
+        }
+      });
+
+      calendar.render();
+    }
+
+    // 이벤트 리스너 등록
+    function setupEventListeners() {
+      const searchForm = document.getElementById('searchForm');
+      const schoolInput = document.getElementById('schoolInput');
+
+      searchForm.addEventListener('submit', function(e) {
+        e.preventDefault();
+        const query = schoolInput.value.trim();
+        if (query) {
+          handleSchoolSearch(query);
+        }
+      });
+    }
+
+    // [2단계] 학교 검색 함수 (https://open.neis.go.kr/hub/schoolInfo 호출)
+    async function handleSchoolSearch(schoolName) {
+      showLoading(true);
+      hideError();
+
+      const url = `https://open.neis.go.kr/hub/schoolInfo?KEY=${NEIS_API_KEY}&Type=json&pIndex=1&pSize=20&SCHUL_NM=${encodeURIComponent(schoolName)}`;
+
+      try {
+        const response = await fetch(url);
+        const data = await response.json();
+
+        // 에러 처리 또는 검색 결과 없음 검사
+        if (data.RESULT && data.RESULT.CODE !== 'INFO-000') {
+          showError('검색 결과를 찾을 수 없습니다. 정확한 학교명을 입력해주세요.');
+          showLoading(false);
+          return;
+        }
+
+        const schools = data.schoolInfo && data.schoolInfo[1] && data.schoolInfo[1].row;
+        if (!schools || schools.length === 0) {
+          showError('해당 이름의 학교를 찾을 수 없습니다.');
+          showLoading(false);
+          return;
+        }
+
+        // 검색 결과가 여러 개일 경우 드롭다운에 표시하거나, 1개이면 자동 선택
+        if (schools.length === 1) {
+          selectSchool(schools[0]);
+        } else {
+          showSchoolDropdown(schools);
+        }
+      } catch (err) {
+        console.error(err);
+        showError('학교 정보 검색 중 오류가 발생했습니다. API 키 및 네트워크를 확인해주세요.');
+      } finally {
+        showLoading(false);
+      }
+    }
+
+    // 검색 드롭다운 목록 표시
+    function showSchoolDropdown(schools) {
+      const dropdown = document.getElementById('searchDropdown');
+      dropdown.innerHTML = '';
+      dropdown.classList.remove('hidden');
+
+      schools.forEach(school => {
+        const item = document.createElement('div');
+        item.className = 'p-3 hover:bg-slate-50 dark:hover:bg-slate-800 cursor-pointer flex items-center justify-between text-sm transition-colors';
+        item.innerHTML = `
+          <div>
+            <span class="font-bold text-slate-900 dark:text-white">${school.SCHUL_NM}</span>
+            <span class="text-xs text-slate-400 ml-2">${school.LCTN_SC_NM || ''}</span>
+          </div>
+          <span class="text-xs px-2 py-0.5 rounded bg-slate-100 dark:bg-slate-800 text-slate-500">${school.ATPT_OFCDC_SC_NM}</span>
+        `;
+        item.onclick = () => {
+          dropdown.classList.add('hidden');
+          selectSchool(school);
+        };
+        dropdown.appendChild(item);
+      });
+    }
+
+    // 퀵 검색 함수
+    function quickSearch(schoolName) {
+      document.getElementById('schoolInput').value = schoolName;
+      handleSchoolSearch(schoolName);
+    }
+
+    // 학교 선택 후 코드 추출 및 일정 조회 실행
+    function selectSchool(school) {
+      currentSchool = school;
+
+      // [3단계] 추출한 교육청코드(ATPT_OFCDC_SC_CODE)와 학교코드(SD_SCHUL_CODE)
+      const atptCode = school.ATPT_OFCDC_SC_CODE;
+      const schulCode = school.SD_SCHUL_CODE;
+
+      // 화면 배너에 학교 정보 표시
+      document.getElementById('schoolBanner').classList.remove('hidden');
+      document.getElementById('schoolNameHeading').textContent = school.SCHUL_NM;
+      document.getElementById('schoolOffice').textContent = school.ATPT_OFCDC_SC_NM;
+      document.getElementById('schoolAddress').textContent = school.ORG_RDNMA || school.LCTN_SC_NM || '주소 정보 없음';
+      document.getElementById('schoolTypeBadge').textContent = school.SCHUL_KND_SC_NM || '학교';
+
+      // 학사일정 조회 실행
+      fetchScheduleData(atptCode, schulCode);
+    }
+
+    // [4단계] 학사일정 데이터 가져오기 (https://open.neis.go.kr/hub/SchoolSchedule 호출)
+    async function fetchScheduleData(atptCode, schulCode) {
+      showLoading(true);
+      hideError();
+
+      const year = selectedYear;
+      const fromYmd = `${year}0101`;
+      const toYmd = `${year}1231`;
+
+      const url = `https://open.neis.go.kr/hub/SchoolSchedule?KEY=${NEIS_API_KEY}&Type=json&pIndex=1&pSize=1000&ATPT_OFCDC_SC_CODE=${atptCode}&SD_SCHUL_CODE=${schulCode}&AA_FROM_YMD=${fromYmd}&AA_TO_YMD=${toYmd}`;
+
+      try {
+        const response = await fetch(url);
+        const data = await response.json();
+
+        if (data.RESULT && data.RESULT.CODE !== 'INFO-000') {
+          if (data.RESULT.CODE === 'INFO-200') {
+            showError('등록된 학사일정이 없습니다.');
+            calendar.removeAllEvents();
+            showLoading(false);
+            return;
+          }
+          showError('학사일정을 가져오는데 실패했습니다.');
+          showLoading(false);
+          return;
+        }
+
+        const rows = data.SchoolSchedule && data.SchoolSchedule[1] && data.SchoolSchedule[1].row;
+        if (!rows || rows.length === 0) {
+          showError('학사일정 데이터가 비어 있습니다.');
+          calendar.removeAllEvents();
+          showLoading(false);
+          return;
+        }
+
+        // [5단계] 일정 데이터 및 키워드별 색상 커스텀 렌더링
+        const events = rows.map(item => parseEventItem(item));
+
+        calendar.removeAllEvents();
+        calendar.addEventSource(events);
+
+      } catch (err) {
+        console.error(err);
+        showError('학사일정을 불러오는 도중 오류가 발생했습니다.');
+      } finally {
+        showLoading(false);
+      }
+    }
+
+    // [키워드별 색상 분류 매핑 규칙]
+    function parseEventItem(item) {
+      const rawDate = item.AA_YMD; // 예: "20260420"
+      const isoDate = `${rawDate.substring(0,4)}-${rawDate.substring(4,6)}-${rawDate.substring(6,8)}`;
+      const title = item.EVENT_NM;
+      const subType = item.SBTR_DD_SC_NM || '';
+      const text = `${title} ${subType}`.toLowerCase();
+
+      let color = '#007AFF'; // 기본 Apple Blue
+      let category = '일반일정';
+
+      if (text.includes('시험') || text.includes('고사') || text.includes('평가') || text.includes('수능') || text.includes('모의')) {
+        color = '#FF9500'; // Orange - 시험
+        category = '시험';
+      } else if (text.includes('방학') || text.includes('종업') || text.includes('휴가')) {
+        color = '#34C759'; // Green - 방학
+        category = '방학';
+      } else if (text.includes('공휴일') || text.includes('휴업일') || text.includes('개교기념일') || text.includes('어린이날') || text.includes('추석') || text.includes('설날')) {
+        color = '#FF3B30'; // Red - 공휴일
+        category = '공휴일';
+      } else if (text.includes('입학') || text.includes('졸업') || text.includes('개학')) {
+        color = '#007AFF'; // Blue - 입학/졸업/개학
+        category = '입학/졸업/개학';
+      } else if (text.includes('축제') || text.includes('행사') || text.includes('수련') || text.includes('체육') || text.includes('대회')) {
+        color = '#5856D6'; // Indigo/Purple - 학교행사
+        category = '학교행사';
+      }
+
+      return {
+        id: rawDate + '_' + Math.random().toString(36).substr(2, 4),
+        title: title,
+        start: isoDate,
+        allDay: true,
+        backgroundColor: color,
+        borderColor: color,
+        textColor: '#ffffff',
+        extendedProps: {
+          category: category,
+          rawItem: item
+        }
+      };
+    }
+
+    // 상세 모달 열기
+    function showEventDetail(event) {
+      const raw = event.extendedProps.rawItem || {};
+      document.getElementById('modalEventTitle').textContent = event.title;
+      document.getElementById('modalEventDate').textContent = event.startStr;
+      document.getElementById('modalSchoolName').textContent = currentSchool ? currentSchool.SCHUL_NM : '';
+      document.getElementById('modalSubtractDay').textContent = raw.SBTR_DD_SC_NM || '정상수업';
+      document.getElementById('modalCategoryBadge').textContent = event.extendedProps.category;
+
+      // 대상 학년 파악
+      let grades = [];
+      if (raw.ONE_GRADE_EVENT_YN === 'Y') grades.push('1학년');
+      if (raw.TW_GRADE_EVENT_YN === 'Y') grades.push('2학년');
+      if (raw.THREE_GRADE_EVENT_YN === 'Y') grades.push('3학년');
+      document.getElementById('modalGrades').textContent = grades.length > 0 ? grades.join(', ') : '전학년';
+
+      document.getElementById('eventModal').classList.remove('hidden');
+    }
+
+    function closeEventModal() {
+      document.getElementById('eventModal').classList.add('hidden');
+    }
+
+    // API Key 모달 제어
+    function openKeyModal() {
+      document.getElementById('modalKeyInput').value = NEIS_API_KEY;
+      document.getElementById('keyModal').classList.remove('hidden');
+    }
+
+    function closeKeyModal() {
+      document.getElementById('keyModal').classList.add('hidden');
+    }
+
+    function saveApiKey() {
+      const val = document.getElementById('modalKeyInput').value.trim();
+      if (val) {
+        NEIS_API_KEY = val;
+        alert('API 키가 설정되었습니다.');
+        closeKeyModal();
+        if (currentSchool) {
+          selectSchool(currentSchool);
+        }
+      }
+    }
+
+    // 로딩 및 에러 UI 유틸
+    function showLoading(show) {
+      const el = document.getElementById('loadingSpinner');
+      if (show) el.classList.remove('hidden');
+      else el.classList.add('hidden');
+    }
+
+    function showError(msg) {
+      const el = document.getElementById('errorMessage');
+      el.textContent = msg;
+      el.classList.remove('hidden');
+    }
+
+    function hideError() {
+      document.getElementById('errorMessage').classList.add('hidden');
+    }
+  </script>
+</body>
+</html>
